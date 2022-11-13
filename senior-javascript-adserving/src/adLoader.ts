@@ -1,5 +1,6 @@
 const gptUrl = "https://securepubads.g.doubleclick.net/tag/js/gpt.js";
 import ADSIZES from "../config/standardSizes";
+import {callOnceVisible} from "./lazyLoader";
 
 export default class AdLoader {
 
@@ -33,14 +34,17 @@ export default class AdLoader {
     }
 
     public registerAdSlot(domId: string, path: string) {
+        const element = document.getElementById(domId);
+
         googletag.cmd.push(() => {
             const sizes = this.filterForFittingSize(domId, ADSIZES);
             const slot = googletag.defineSlot(path, sizes as googletag.MultiSize, domId).addService(googletag.pubads());
             //this is just for showing green boxed preview ads
             slot.setTargeting("adpreview","dev")
             googletag.enableServices();
-            //TODO: delay that function call till the element approaches viewport
-            googletag.display(domId);
+            callOnceVisible(element, () => {
+                googletag.display(element.id);
+            });
         });
     }
 
