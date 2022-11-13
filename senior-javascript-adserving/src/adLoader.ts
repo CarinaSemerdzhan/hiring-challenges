@@ -17,12 +17,11 @@ export default class AdLoader {
     }
 
     private loadGoogleSDK(): Promise<any> {
-        return new Promise((resolve, reject) => {
-            let r = resolve;
+        return new Promise((resolve) => {
             this.appendScriptToHead(gptUrl).then(() => {
                 googletag.cmd.push(function () {
                     //resolve this for signaling gpt sdk is ready
-                    r(null);
+                    resolve(null);
                 })
             });
         })
@@ -35,8 +34,8 @@ export default class AdLoader {
 
     public registerAdSlot(domId: string, path: string) {
         googletag.cmd.push(() => {
-            let sizes = this.filterForFittingSizes(domId, ADSIZES);
-            let slot = googletag.defineSlot(path, sizes as googletag.MultiSize, domId).addService(googletag.pubads());
+            const sizes = this.filterForFittingSize(domId, ADSIZES);
+            const slot = googletag.defineSlot(path, sizes as googletag.MultiSize, domId).addService(googletag.pubads());
             //this is just for showing green boxed preview ads
             slot.setTargeting("adpreview","dev")
             googletag.enableServices();
@@ -45,49 +44,45 @@ export default class AdLoader {
         });
     }
 
-    filterForFittingSizes(domId: string, sizes: googletag.GeneralSize): googletag.GeneralSize {
-        let fittingSizes:googletag.GeneralSize = [];
-
-        for (let size of sizes) {
-            // if Multisize [[300,250],[300,200]]
-            if (Array.isArray(size) && this.checkSizeCondition(size)) {
-                fittingSizes.push(size);
-            }
-            // if SingleSize e.g. [300,250]
-            else if (!Array.isArray(size) && sizes.length === 2) {
-                let singleSize = [sizes[0],sizes[1]] as googletag.SingleSize;
-                if (this.checkSizeCondition(singleSize)){
-                    fittingSizes.push(singleSize);
-                }
-            }
-            //NamedSize "fluid" or ["fluid"]
-            else {
-                fittingSizes.push(size as googletag.NamedSize)
-            }
-        }
-        return fittingSizes;
+    private filterForFittingSize(domId: string, size: googletag.GeneralSize): googletag.MultiSize {
+        return this.filterMultiForFittingSizes(domId, this.isSingleTypeSize(size) ? [size] : size);
     }
 
-    checkSizeCondition(size: googletag.SingleSize): boolean {
-        if (Array.isArray(size) && size.length > 1) {
-            let width = document.body.clientWidth;
-            let height = document.body.clientHeight;
-            if (size[0] as number / 2 <= width && size[0] as number / 2 <= height) {
-                return true;
-            }
+    private filterMultiForFittingSizes(domId: string, sizes: googletag.MultiSize): googletag.MultiSize {
+        const element = document.getElementById(domId);
+        return sizes.filter(s => this.checkSizeCondition(s, element));
+    }
+
+    private checkSizeCondition(size: googletag.SingleSize, element: HTMLElement): boolean {
+        if (this.isFluid(size)) {
+            return true;
         }
-        return false;
+        const {height, width} = element.getBoundingClientRect();
+        return size[0] <= width && size[1] <= height;
     }
 
 
     private appendScriptToHead(scriptSrc: string): Promise<any> {
         return new Promise((resolve, reject) => {
-            let s = document.createElement("script");
+            const s = document.createElement("script");
             s.type = "text/javascript";
             s.src = scriptSrc;
             s.onload = resolve;
-            s.onerror = reject;
+            s.onerror = reject; 
             document.head.appendChild(s);
-        })
+        });
+    }
+
+    private isSingleTypeSize(size: googletag.GeneralSize): size is googletag.SingleSize {
+        if (this.isFluid(size)) {
+            return true;
+        }
+        // Check if [number, number]
+        return size.length === 2 && typeof size[0] === "number" && typeof size[1] === 'number';
+    }
+
+    private isFluid(size: googletag.GeneralSize): size is googletag.NamedSize {
+        return typeof size === 'string' || // Check if "fluid"
+            size.length === 1 && typeof size[0] === 'string'; // Check if ["fluid"]
     }
 }
